@@ -822,8 +822,8 @@ namespace Microsoft.AspNetCore.Server.Kestrel.Internal.Http
 
         public RequestLineStatus TakeStartLine(SocketInput input)
         {
-            var start = input.ConsumingStart();
-            var scan = start;
+            var scan = input.ConsumingStart();
+            var start = scan;
             var consumed = scan;
             var end = scan;
 
@@ -856,43 +856,18 @@ namespace Microsoft.AspNetCore.Server.Kestrel.Internal.Http
                         return RequestLineStatus.Incomplete;
                     }
                 }
-
                 end.Take();
 
-                var methodStart = scan;
-                var methodEnd = methodStart;
-                if (methodEnd.Seek(ref _vectorSpaces, ref end) == -1)
-                {
-                    RejectRequest(RequestRejectionReason.InvalidRequestLine, GetInvalidRequestLineString(start, end));
-                }
-
-                var targetStart = methodEnd;
-                targetStart.Take();
-                var targetEnd = targetStart;
-                if (targetEnd.Seek(ref _vectorSpaces, ref end) == -1)
-                {
-                    RejectRequest(RequestRejectionReason.InvalidRequestLine, GetInvalidRequestLineString(start, end));
-                }
-
-                var versionStart = targetEnd;
-                versionStart.Take();
-                var versionEnd = targetStart;
-                if (versionEnd.Seek(ref _vectorCRs, ref end) == -1)
-                {
-                    RejectRequest(RequestRejectionReason.InvalidRequestLine, GetInvalidRequestLineString(start, end));
-                }
-
-                scan = versionEnd;
-                scan.Take();
-                if (scan.Take() != '\n')
-                {
-                    RejectRequest(RequestRejectionReason.InvalidRequestLine, GetInvalidRequestLineString(start, end));
-                }
-
                 string method;
-                if (!methodStart.GetKnownMethod(out method))
+                var begin = scan;
+                if (!begin.GetKnownMethod(out method))
                 {
-                    method = methodStart.GetAsciiString(methodEnd);
+                    if (scan.Seek(ref _vectorSpaces, ref end) == -1)
+                    {
+                        RejectRequest(RequestRejectionReason.InvalidRequestLine, GetInvalidRequestLineString(start, end));
+                    }
+
+                    method = begin.GetAsciiString(scan);
 
                     if (method == null)
                     {
@@ -909,38 +884,66 @@ namespace Microsoft.AspNetCore.Server.Kestrel.Internal.Http
                         }
                     }
                 }
+                else
+                {
+                    scan.Skip(method.Length);
+                }
 
-                scan = targetStart;
+                scan.Take();
+                begin = scan;
                 var needDecode = false;
                 var chFound = scan.Seek(ref _vectorSpaces, ref _vectorQuestionMarks, ref _vectorPercentages, ref end);
-                if (chFound == '%')
+                if (chFound == -1)
+                {
+                    RejectRequest(RequestRejectionReason.InvalidRequestLine, GetInvalidRequestLineString(start, end));
+                }
+                else if (chFound == '%')
                 {
                     needDecode = true;
                     chFound = scan.Seek(ref _vectorSpaces, ref _vectorQuestionMarks, ref end);
+                    if (chFound == -1)
+                    {
+                        RejectRequest(RequestRejectionReason.InvalidRequestLine, GetInvalidRequestLineString(start, end));
+                    }
                 }
 
-                var pathBegin = targetStart;
+                var pathBegin = begin;
                 var pathEnd = scan;
+
                 var queryString = "";
                 if (chFound == '?')
                 {
-                    queryString = scan.GetAsciiString(targetEnd);
+                    begin = scan;
+                    if (scan.Seek(ref _vectorSpaces, ref end) == -1)
+                    {
+                        RejectRequest(RequestRejectionReason.InvalidRequestLine, GetInvalidRequestLineString(start, end));
+                    }
+                    queryString = begin.GetAsciiString(scan);
                 }
+
+                var queryEnd = scan;
 
                 if (pathBegin.Peek() == ' ')
                 {
                     RejectRequest(RequestRejectionReason.InvalidRequestLine, GetInvalidRequestLineString(start, end));
                 }
 
+                scan.Take();
+                begin = scan;
+                if (scan.Seek(ref _vectorCRs, ref end) == -1)
+                {
+                    RejectRequest(RequestRejectionReason.InvalidRequestLine, GetInvalidRequestLineString(start, end));
+                }
+
                 string httpVersion;
-                if (!versionStart.GetKnownVersion(out httpVersion))
+                if (!begin.GetKnownVersion(out httpVersion))
                 {
                     // A slower fallback is necessary since the iterator's PeekLong() method
                     // used in GetKnownVersion() only examines two memory blocks at most.
                     // Although unlikely, it is possible that the 8 bytes forming the version
                     // could be spread out on more than two blocks, if the connection
                     // happens to be unusually slow.
-                    httpVersion = versionStart.GetAsciiString(versionEnd);
+                    httpVersion = begin.GetAsciiString(scan);
 
                     if (httpVersion == null)
                     {
@@ -952,6 +955,12 @@ namespace Microsoft.AspNetCore.Server.Kestrel.Internal.Http
                     }
                 }
 
+                scan.Take(); // consume CR
+                if (scan.Take() != '\n')
+                {
+                    RejectRequest(RequestRejectionReason.InvalidRequestLine, GetInvalidRequestLineString(start, end));
+                }
+
                 // URIs are always encoded/escaped to ASCII https://tools.ietf.org/html/rfc3986#page-11
                 // Multibyte Internationalized Resource Identifiers (IRIs) are first converted to utf8;
                 // then encoded/escaped to ASCII  https://www.ietf.org/rfc/rfc3987.txt "Mapping of IRIs to URIs"
@@ -960,7 +969,7 @@ namespace Microsoft.AspNetCore.Server.Kestrel.Internal.Http
                 if (needDecode)
                 {
                     // Read raw target before mutating memory.
-                    rawTarget = pathBegin.GetAsciiString(targetEnd);
+                    rawTarget = pathBegin.GetAsciiString(queryEnd);
 
                     // URI was encoded, unescape and then parse as utf8
                     pathEnd = UrlPathDecoder.Unescape(pathBegin, pathEnd);
@@ -979,13 +988,13 @@ namespace Microsoft.AspNetCore.Server.Kestrel.Internal.Http
                     }
                     else
                     {
-                        rawTarget = pathBegin.GetAsciiString(targetEnd);
+                        rawTarget = pathBegin.GetAsciiString(queryEnd);
                     }
                 }
 
                 var normalizedTarget = PathNormalizer.RemoveDotSegments(requestUrlPath);
 
-                consumed = end;
+                consumed = scan;
                 Method = method;
                 QueryString = queryString;
                 RawTarget = rawTarget;
