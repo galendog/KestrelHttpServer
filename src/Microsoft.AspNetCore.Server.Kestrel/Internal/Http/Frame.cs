@@ -822,6 +822,8 @@ namespace Microsoft.AspNetCore.Server.Kestrel.Internal.Http
 
         public RequestLineStatus TakeStartLine(SocketInput input)
         {
+            const int MaxInvalidRequestLineChars = 32;
+
             var scan = input.ConsumingStart();
             var start = scan;
             var consumed = scan;
@@ -864,14 +866,14 @@ namespace Microsoft.AspNetCore.Server.Kestrel.Internal.Http
                 {
                     if (scan.Seek(ref _vectorSpaces, ref end) == -1)
                     {
-                        RejectRequest(RequestRejectionReason.InvalidRequestLine, GetInvalidRequestLineString(start, end));
+                        RejectRequest(RequestRejectionReason.InvalidRequestLine, start.GetAsciiStringEscaped(end, MaxInvalidRequestLineChars));
                     }
 
                     method = begin.GetAsciiString(scan);
 
                     if (method == null)
                     {
-                        RejectRequest(RequestRejectionReason.InvalidRequestLine, GetInvalidRequestLineString(start, end));
+                        RejectRequest(RequestRejectionReason.InvalidRequestLine, start.GetAsciiStringEscaped(end, MaxInvalidRequestLineChars));
                     }
 
                     // Note: We're not in the fast path any more (GetKnownMethod should have handled any HTTP Method we're aware of)
@@ -880,7 +882,7 @@ namespace Microsoft.AspNetCore.Server.Kestrel.Internal.Http
                     {
                         if (!IsValidTokenChar(method[i]))
                         {
-                            RejectRequest(RequestRejectionReason.InvalidRequestLine, GetInvalidRequestLineString(start, end));
+                            RejectRequest(RequestRejectionReason.InvalidRequestLine, start.GetAsciiStringEscaped(end, MaxInvalidRequestLineChars));
                         }
                     }
                 }
@@ -895,7 +897,7 @@ namespace Microsoft.AspNetCore.Server.Kestrel.Internal.Http
                 var chFound = scan.Seek(ref _vectorSpaces, ref _vectorQuestionMarks, ref _vectorPercentages, ref end);
                 if (chFound == -1)
                 {
-                    RejectRequest(RequestRejectionReason.InvalidRequestLine, GetInvalidRequestLineString(start, end));
+                    RejectRequest(RequestRejectionReason.InvalidRequestLine, start.GetAsciiStringEscaped(end, MaxInvalidRequestLineChars));
                 }
                 else if (chFound == '%')
                 {
@@ -903,7 +905,7 @@ namespace Microsoft.AspNetCore.Server.Kestrel.Internal.Http
                     chFound = scan.Seek(ref _vectorSpaces, ref _vectorQuestionMarks, ref end);
                     if (chFound == -1)
                     {
-                        RejectRequest(RequestRejectionReason.InvalidRequestLine, GetInvalidRequestLineString(start, end));
+                        RejectRequest(RequestRejectionReason.InvalidRequestLine, start.GetAsciiStringEscaped(end, MaxInvalidRequestLineChars));
                     }
                 }
 
@@ -916,7 +918,7 @@ namespace Microsoft.AspNetCore.Server.Kestrel.Internal.Http
                     begin = scan;
                     if (scan.Seek(ref _vectorSpaces, ref end) == -1)
                     {
-                        RejectRequest(RequestRejectionReason.InvalidRequestLine, GetInvalidRequestLineString(start, end));
+                        RejectRequest(RequestRejectionReason.InvalidRequestLine, start.GetAsciiStringEscaped(end, MaxInvalidRequestLineChars));
                     }
                     queryString = begin.GetAsciiString(scan);
                 }
@@ -925,14 +927,14 @@ namespace Microsoft.AspNetCore.Server.Kestrel.Internal.Http
 
                 if (pathBegin.Peek() == ' ')
                 {
-                    RejectRequest(RequestRejectionReason.InvalidRequestLine, GetInvalidRequestLineString(start, end));
+                    RejectRequest(RequestRejectionReason.InvalidRequestLine, start.GetAsciiStringEscaped(end, MaxInvalidRequestLineChars));
                 }
 
                 scan.Take();
                 begin = scan;
                 if (scan.Seek(ref _vectorCRs, ref end) == -1)
                 {
-                    RejectRequest(RequestRejectionReason.InvalidRequestLine, GetInvalidRequestLineString(start, end));
+                    RejectRequest(RequestRejectionReason.InvalidRequestLine, start.GetAsciiStringEscaped(end, MaxInvalidRequestLineChars));
                 }
 
                 string httpVersion;
@@ -947,7 +949,7 @@ namespace Microsoft.AspNetCore.Server.Kestrel.Internal.Http
 
                     if (httpVersion == null)
                     {
-                        RejectRequest(RequestRejectionReason.InvalidRequestLine, GetInvalidRequestLineString(start, end));
+                        RejectRequest(RequestRejectionReason.InvalidRequestLine, start.GetAsciiStringEscaped(end, MaxInvalidRequestLineChars));
                     }
                     else if (httpVersion != "HTTP/1.0" && httpVersion != "HTTP/1.1")
                     {
@@ -958,7 +960,7 @@ namespace Microsoft.AspNetCore.Server.Kestrel.Internal.Http
                 scan.Take(); // consume CR
                 if (scan.Take() != '\n')
                 {
-                    RejectRequest(RequestRejectionReason.InvalidRequestLine, GetInvalidRequestLineString(start, end));
+                    RejectRequest(RequestRejectionReason.InvalidRequestLine, start.GetAsciiStringEscaped(end, MaxInvalidRequestLineChars));
                 }
 
                 // URIs are always encoded/escaped to ASCII https://tools.ietf.org/html/rfc3986#page-11
@@ -1023,20 +1025,6 @@ namespace Microsoft.AspNetCore.Server.Kestrel.Internal.Http
             {
                 input.ConsumingComplete(consumed, end);
             }
-        }
-
-        private string GetInvalidRequestLineString(MemoryPoolIterator start, MemoryPoolIterator end)
-        {
-            var sb = new StringBuilder();
-            var scan = start;
-
-            while (scan.Block != end.Block || scan.Index != end.Index)
-            {
-                var ch = scan.Take();
-                sb.Append(ch < 0x20 || ch >= 0x7F ? $"<0x{ch.ToString("X2")}>" : ((char)ch).ToString());
-            }
-
-            return sb.ToString();
         }
 
         private static bool IsValidTokenChar(char c)

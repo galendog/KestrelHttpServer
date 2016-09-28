@@ -766,6 +766,39 @@ namespace Microsoft.AspNetCore.Server.KestrelTests
             }
         }
 
+        [Theory]
+        [InlineData("a", "a", 1)]
+        [InlineData("ab", "a...", 1)]
+        [InlineData("abcde", "abcde", 5)]
+        [InlineData("abcde", "abcd...", 4)]
+        [InlineData("abcde", "abcde", 6)]
+        public void TestGetAsciiStringEscaped(string input, string expected, int maxChars)
+        {
+            MemoryPoolBlock block = null;
+
+            try
+            {
+                // Arrange
+                block = _pool.Lease();
+                var chars = input.ToCharArray().Select(c => (byte)c).ToArray();
+                Buffer.BlockCopy(chars, 0, block.Array, block.Start, chars.Length);
+                block.End += chars.Length;
+                var start = block.GetIterator();
+                var end = start;
+                end.Skip(input.Length);
+
+                // Act
+                var result = start.GetAsciiStringEscaped(end, maxChars);
+
+                // Assert
+                Assert.Equal(expected, result);
+            }
+            finally
+            {
+                if (block != null) _pool.Return(block);
+            }
+        }
+
         private delegate bool GetKnownString(MemoryPoolIterator iter, out string result);
 
         private void TestKnownStringsInterning(string input, string expected, GetKnownString action)
