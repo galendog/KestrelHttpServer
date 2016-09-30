@@ -63,7 +63,7 @@ namespace Microsoft.AspNetCore.Server.KestrelTests
 
         [Theory]
         [MemberData(nameof(ConnectionFilterData))]
-        public async Task ResponsesAreNotChunkedAutomaticallyForHttp10RequestsAndHttp11NonKeepAliveRequests(TestServiceContext testContext)
+        public async Task ResponsesAreNotChunkedAutomaticallyForHttp10Requests(TestServiceContext testContext)
         {
             using (var server = new TestServer(async httpContext =>
             {
@@ -86,7 +86,18 @@ namespace Microsoft.AspNetCore.Server.KestrelTests
                         "",
                         "Hello World!");
                 }
+            }
+        }
 
+        public async Task ResponsesAreNotChunkedAutomaticallyForHttp11NonKeepAliveRequests(TestServiceContext testContext)
+        {
+            using (var server = new TestServer(async httpContext =>
+            {
+                var response = httpContext.Response;
+                await response.Body.WriteAsync(Encoding.ASCII.GetBytes("Hello "), 0, 6);
+                await response.Body.WriteAsync(Encoding.ASCII.GetBytes("World!"), 0, 6);
+            }, testContext))
+            {
                 using (var connection = server.CreateConnection())
                 {
                     await connection.SendEnd(
@@ -103,7 +114,6 @@ namespace Microsoft.AspNetCore.Server.KestrelTests
                 }
             }
         }
-
 
         [Theory]
         [MemberData(nameof(ConnectionFilterData))]
