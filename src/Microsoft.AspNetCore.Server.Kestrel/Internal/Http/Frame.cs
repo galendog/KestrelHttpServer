@@ -781,7 +781,7 @@ namespace Microsoft.AspNetCore.Server.Kestrel.Internal.Http
                         // the headers we can safely set the Content-Length to 0.
                         responseHeaders.SetRawContentLength("0", _bytesContentLengthZero);
                     }
-                    else if (_keepAlive)
+                    else
                     {
                         // Note for future reference: never change this to set _autoChunk to true on HTTP/1.0
                         // connections, even if we were to infer the client supports it because an HTTP/1.0 request
