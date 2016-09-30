@@ -503,6 +503,52 @@ namespace Microsoft.AspNetCore.Server.KestrelTests
         }
 
         [Theory]
+        [InlineData("", "HTTP/1.1\r")]
+        [InlineData("H", "TTP/1.1\r")]
+        [InlineData("HT", "TP/1.1\r")]
+        [InlineData("HTT", "P/1.1\r")]
+        [InlineData("HTTP", "/1.1\r")]
+        [InlineData("HTTP/", "1.1\r")]
+        [InlineData("HTTP/1", ".1\r")]
+        [InlineData("HTTP/1.", "1\r")]
+        [InlineData("HTTP/1.1", "\r")]
+        [InlineData("HTTP/1.1\r", "")]
+        public void KnownVersionCanBeReadAtAnyBlockBoundary(string block1Input, string block2Input)
+        {
+            MemoryPoolBlock block1 = null;
+            MemoryPoolBlock block2 = null;
+
+            try
+            {
+                // Arrange
+                var chars1 = block1Input.ToCharArray().Select(c => (byte)c).ToArray();
+                var chars2 = block2Input.ToCharArray().Select(c => (byte)c).ToArray();
+                block1 = _pool.Lease();
+                block2 = _pool.Lease();
+                Buffer.BlockCopy(chars1, 0, block1.Array, block1.Start, chars1.Length);
+                Buffer.BlockCopy(chars2, 0, block2.Array, block2.Start, chars2.Length);
+                block1.End += chars1.Length;
+                block2.End += chars2.Length;
+                block1.Next = block2;
+                var iterator = block1.GetIterator();
+
+                // Act
+                string knownVersion;
+                var result = iterator.GetKnownVersion(out knownVersion);
+
+                // Assert
+                Assert.True(result);
+                Assert.Equal("HTTP/1.1", knownVersion);
+            }
+            finally
+            {
+                // Cleanup
+                if (block1 != null) _pool.Return(block1);
+                if (block2 != null) _pool.Return(block2);
+            }
+        }
+
+        [Theory]
         [InlineData("CONNECT / HTTP/1.1", "CONNECT")]
         [InlineData("DELETE / HTTP/1.1", "DELETE")]
         [InlineData("GET / HTTP/1.1", "GET")]

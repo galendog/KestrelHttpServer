@@ -940,18 +940,13 @@ namespace Microsoft.AspNetCore.Server.Kestrel.Internal.Http
                 string httpVersion;
                 if (!begin.GetKnownVersion(out httpVersion))
                 {
-                    // A slower fallback is necessary since the iterator's PeekLong() method
-                    // used in GetKnownVersion() only examines two memory blocks at most.
-                    // Although unlikely, it is possible that the 8 bytes forming the version
-                    // could be spread out on more than two blocks, if the connection
-                    // happens to be unusually slow.
-                    httpVersion = begin.GetAsciiString(scan);
+                    httpVersion = begin.GetAsciiStringEscaped(scan, 8);
 
-                    if (httpVersion == null)
+                    if (httpVersion == string.Empty)
                     {
                         RejectRequest(RequestRejectionReason.InvalidRequestLine, start.GetAsciiStringEscaped(end, MaxInvalidRequestLineChars));
                     }
-                    else if (httpVersion != "HTTP/1.0" && httpVersion != "HTTP/1.1")
+                    else
                     {
                         RejectRequest(RequestRejectionReason.UnrecognizedHTTPVersion, httpVersion);
                     }
