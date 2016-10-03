@@ -622,6 +622,35 @@ namespace Microsoft.AspNetCore.Server.KestrelTests
 
         [Theory]
         [MemberData(nameof(ConnectionFilterData))]
+        public async Task WriteOnHeadResponseLoggedOnlyOnce(TestServiceContext testContext)
+        {
+            using (var server = new TestServer(async httpContext =>
+            {
+                await httpContext.Response.WriteAsync("hello, ");
+                await httpContext.Response.WriteAsync("world");
+                await httpContext.Response.WriteAsync("!");
+            }, testContext))
+            {
+                using (var connection = server.CreateConnection())
+                {
+                    await connection.SendEnd(
+                        "HEAD / HTTP/1.1",
+                        "",
+                        "");
+                    await connection.ReceiveEnd(
+                        "HTTP/1.1 200 OK",
+                        $"Date: {testContext.DateHeaderValue}",
+                        "",
+                        "");
+                }
+
+                Assert.Equal(1, ((TestKestrelTrace)testContext.Log).HeadResponseWrites);
+                Assert.Equal(13, ((TestKestrelTrace)testContext.Log).HeadResponseWriteByteCount);
+            }
+        }
+
+        [Theory]
+        [MemberData(nameof(ConnectionFilterData))]
         public async Task ThrowingResultsIn500Response(TestServiceContext testContext)
         {
             bool onStartingCalled = false;

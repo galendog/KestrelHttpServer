@@ -75,6 +75,8 @@ namespace Microsoft.AspNetCore.Server.Kestrel.Internal.Http
         protected readonly long _keepAliveMilliseconds;
         private readonly long _requestHeadersTimeoutMilliseconds;
 
+        private int _responseBytesWritten;
+
         public Frame(ConnectionContext context)
         {
             ConnectionContext = context;
@@ -347,6 +349,8 @@ namespace Microsoft.AspNetCore.Server.Kestrel.Internal.Http
 
             _remainingRequestHeadersBytesAllowed = ServerOptions.Limits.MaxRequestHeadersTotalSize;
             _requestHeadersParsed = 0;
+
+            _responseBytesWritten = 0;
         }
 
         /// <summary>
@@ -513,6 +517,7 @@ namespace Microsoft.AspNetCore.Server.Kestrel.Internal.Http
         public void Write(ArraySegment<byte> data)
         {
             ProduceStartAndFireOnStarting().GetAwaiter().GetResult();
+            _responseBytesWritten += data.Count;
 
             if (_canHaveBody)
             {
@@ -531,7 +536,7 @@ namespace Microsoft.AspNetCore.Server.Kestrel.Internal.Http
             }
             else
             {
-                HandleNonBodyResponseWrite(data.Count);
+                HandleNonBodyResponseWrite();
             }
         }
 
@@ -541,6 +546,8 @@ namespace Microsoft.AspNetCore.Server.Kestrel.Internal.Http
             {
                 return WriteAsyncAwaited(data, cancellationToken);
             }
+
+            _responseBytesWritten += data.Count;
 
             if (_canHaveBody)
             {
@@ -559,7 +566,7 @@ namespace Microsoft.AspNetCore.Server.Kestrel.Internal.Http
             }
             else
             {
-                HandleNonBodyResponseWrite(data.Count);
+                HandleNonBodyResponseWrite();
                 return TaskCache.CompletedTask;
             }
         }
@@ -567,6 +574,7 @@ namespace Microsoft.AspNetCore.Server.Kestrel.Internal.Http
         public async Task WriteAsyncAwaited(ArraySegment<byte> data, CancellationToken cancellationToken)
         {
             await ProduceStartAndFireOnStarting();
+            _responseBytesWritten += data.Count;
 
             if (_canHaveBody)
             {
@@ -585,7 +593,7 @@ namespace Microsoft.AspNetCore.Server.Kestrel.Internal.Http
             }
             else
             {
-                HandleNonBodyResponseWrite(data.Count);
+                HandleNonBodyResponseWrite();
                 return;
             }
         }
@@ -738,6 +746,11 @@ namespace Microsoft.AspNetCore.Server.Kestrel.Internal.Http
             if (_keepAlive)
             {
                 ConnectionControl.End(ProduceEndType.ConnectionKeepAlive);
+            }
+
+            if (HttpMethods.IsHead(Method) && _responseBytesWritten > 0)
+            {
+                Log.ConnectionHeadResponseBodyWrite(ConnectionId, _responseBytesWritten);
             }
 
             return TaskCache.CompletedTask;
@@ -1324,14 +1337,10 @@ namespace Microsoft.AspNetCore.Server.Kestrel.Internal.Http
             }
         }
 
-        public void HandleNonBodyResponseWrite(int count)
+        public void HandleNonBodyResponseWrite()
         {
-            if (Method == "HEAD")
-            {
-                // Don't write to body for HEAD requests.
-                Log.ConnectionHeadResponseBodyWrite(ConnectionId, count);
-            }
-            else
+            // Writes to HEAD response are ignored and logged at the end of the request
+            if (Method != "HEAD")
             {
                 // Throw Exception for 204, 205, 304 responses.
                 throw new InvalidOperationException($"Write to non-body {StatusCode} response.");
