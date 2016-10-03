@@ -866,14 +866,16 @@ namespace Microsoft.AspNetCore.Server.Kestrel.Internal.Http
                 {
                     if (scan.Seek(ref _vectorSpaces, ref end) == -1)
                     {
-                        RejectRequest(RequestRejectionReason.InvalidRequestLine, start.GetAsciiStringEscaped(end, MaxInvalidRequestLineChars));
+                        RejectRequest(RequestRejectionReason.InvalidRequestLine,
+                            Log.IsEnabled(LogLevel.Information) ? start.GetAsciiStringEscaped(end, MaxInvalidRequestLineChars) : string.Empty);
                     }
 
                     method = begin.GetAsciiString(scan);
 
                     if (method == null)
                     {
-                        RejectRequest(RequestRejectionReason.InvalidRequestLine, start.GetAsciiStringEscaped(end, MaxInvalidRequestLineChars));
+                        RejectRequest(RequestRejectionReason.InvalidRequestLine,
+                            Log.IsEnabled(LogLevel.Information) ? start.GetAsciiStringEscaped(end, MaxInvalidRequestLineChars) : string.Empty);
                     }
 
                     // Note: We're not in the fast path any more (GetKnownMethod should have handled any HTTP Method we're aware of)
@@ -882,7 +884,8 @@ namespace Microsoft.AspNetCore.Server.Kestrel.Internal.Http
                     {
                         if (!IsValidTokenChar(method[i]))
                         {
-                            RejectRequest(RequestRejectionReason.InvalidRequestLine, start.GetAsciiStringEscaped(end, MaxInvalidRequestLineChars));
+                            RejectRequest(RequestRejectionReason.InvalidRequestLine,
+                                Log.IsEnabled(LogLevel.Information) ? start.GetAsciiStringEscaped(end, MaxInvalidRequestLineChars) : string.Empty);
                         }
                     }
                 }
@@ -897,7 +900,8 @@ namespace Microsoft.AspNetCore.Server.Kestrel.Internal.Http
                 var chFound = scan.Seek(ref _vectorSpaces, ref _vectorQuestionMarks, ref _vectorPercentages, ref end);
                 if (chFound == -1)
                 {
-                    RejectRequest(RequestRejectionReason.InvalidRequestLine, start.GetAsciiStringEscaped(end, MaxInvalidRequestLineChars));
+                    RejectRequest(RequestRejectionReason.InvalidRequestLine,
+                        Log.IsEnabled(LogLevel.Information) ? start.GetAsciiStringEscaped(end, MaxInvalidRequestLineChars) : string.Empty);
                 }
                 else if (chFound == '%')
                 {
@@ -905,7 +909,8 @@ namespace Microsoft.AspNetCore.Server.Kestrel.Internal.Http
                     chFound = scan.Seek(ref _vectorSpaces, ref _vectorQuestionMarks, ref end);
                     if (chFound == -1)
                     {
-                        RejectRequest(RequestRejectionReason.InvalidRequestLine, start.GetAsciiStringEscaped(end, MaxInvalidRequestLineChars));
+                        RejectRequest(RequestRejectionReason.InvalidRequestLine,
+                            Log.IsEnabled(LogLevel.Information) ? start.GetAsciiStringEscaped(end, MaxInvalidRequestLineChars) : string.Empty);
                     }
                 }
 
@@ -918,7 +923,8 @@ namespace Microsoft.AspNetCore.Server.Kestrel.Internal.Http
                     begin = scan;
                     if (scan.Seek(ref _vectorSpaces, ref end) == -1)
                     {
-                        RejectRequest(RequestRejectionReason.InvalidRequestLine, start.GetAsciiStringEscaped(end, MaxInvalidRequestLineChars));
+                        RejectRequest(RequestRejectionReason.InvalidRequestLine,
+                            Log.IsEnabled(LogLevel.Information) ? start.GetAsciiStringEscaped(end, MaxInvalidRequestLineChars) : string.Empty);
                     }
                     queryString = begin.GetAsciiString(scan);
                 }
@@ -927,14 +933,16 @@ namespace Microsoft.AspNetCore.Server.Kestrel.Internal.Http
 
                 if (pathBegin.Peek() == ' ')
                 {
-                    RejectRequest(RequestRejectionReason.InvalidRequestLine, start.GetAsciiStringEscaped(end, MaxInvalidRequestLineChars));
+                    RejectRequest(RequestRejectionReason.InvalidRequestLine,
+                        Log.IsEnabled(LogLevel.Information) ? start.GetAsciiStringEscaped(end, MaxInvalidRequestLineChars) : string.Empty);
                 }
 
                 scan.Take();
                 begin = scan;
                 if (scan.Seek(ref _vectorCRs, ref end) == -1)
                 {
-                    RejectRequest(RequestRejectionReason.InvalidRequestLine, start.GetAsciiStringEscaped(end, MaxInvalidRequestLineChars));
+                    RejectRequest(RequestRejectionReason.InvalidRequestLine,
+                        Log.IsEnabled(LogLevel.Information) ? start.GetAsciiStringEscaped(end, MaxInvalidRequestLineChars) : string.Empty);
                 }
 
                 string httpVersion;
@@ -944,7 +952,8 @@ namespace Microsoft.AspNetCore.Server.Kestrel.Internal.Http
 
                     if (httpVersion == string.Empty)
                     {
-                        RejectRequest(RequestRejectionReason.InvalidRequestLine, start.GetAsciiStringEscaped(end, MaxInvalidRequestLineChars));
+                        RejectRequest(RequestRejectionReason.InvalidRequestLine,
+                            Log.IsEnabled(LogLevel.Information) ? start.GetAsciiStringEscaped(end, MaxInvalidRequestLineChars) : string.Empty);
                     }
                     else
                     {
@@ -955,7 +964,8 @@ namespace Microsoft.AspNetCore.Server.Kestrel.Internal.Http
                 scan.Take(); // consume CR
                 if (scan.Take() != '\n')
                 {
-                    RejectRequest(RequestRejectionReason.InvalidRequestLine, start.GetAsciiStringEscaped(end, MaxInvalidRequestLineChars));
+                    RejectRequest(RequestRejectionReason.InvalidRequestLine,
+                        Log.IsEnabled(LogLevel.Information) ? start.GetAsciiStringEscaped(end, MaxInvalidRequestLineChars) : string.Empty);
                 }
 
                 // URIs are always encoded/escaped to ASCII https://tools.ietf.org/html/rfc3986#page-11
