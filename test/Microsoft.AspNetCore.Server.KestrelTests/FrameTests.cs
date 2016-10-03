@@ -1134,6 +1134,40 @@ namespace Microsoft.AspNetCore.Server.KestrelTests
         }
 
         [Fact]
+        public void TakeStartLineThrowsOnUnsupportedHttpVersionLongerThanEigthCharacters()
+        {
+            var trace = new KestrelTrace(new TestKestrelTrace());
+            var ltp = new LoggingThreadPool(trace);
+            using (var pool = new MemoryPool())
+            using (var socketInput = new SocketInput(pool, ltp))
+            {
+                var serviceContext = new ServiceContext
+                {
+                    DateHeaderValueManager = new DateHeaderValueManager(),
+                    ServerOptions = new KestrelServerOptions(),
+                    Log = trace
+                };
+                var listenerContext = new ListenerContext(serviceContext)
+                {
+                    ServerAddress = ServerAddress.FromUrl("http://localhost:5000")
+                };
+                var connectionContext = new ConnectionContext(listenerContext)
+                {
+                    ConnectionControl = Mock.Of<IConnectionControl>(),
+                };
+                var frame = new Frame<object>(application: null, context: connectionContext);
+                frame.Reset();
+
+                var requestLineBytes = Encoding.ASCII.GetBytes("GET / HTTP/1.1ab\r\n");
+                socketInput.IncomingData(requestLineBytes, 0, requestLineBytes.Length);
+
+                var exception = Assert.Throws<BadHttpRequestException>(() => frame.TakeStartLine(socketInput));
+                Assert.Equal("Unrecognized HTTP version: HTTP/1.1a...", exception.Message);
+                Assert.Equal(505, exception.StatusCode);
+            }
+        }
+
+        [Fact]
         public void TakeMessageHeadersCallsConsumingCompleteWithFurthestExamined()
         {
             var trace = new KestrelTrace(new TestKestrelTrace());

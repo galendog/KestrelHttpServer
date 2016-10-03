@@ -948,7 +948,7 @@ namespace Microsoft.AspNetCore.Server.Kestrel.Internal.Http
                 string httpVersion;
                 if (!begin.GetKnownVersion(out httpVersion))
                 {
-                    httpVersion = begin.GetAsciiStringEscaped(scan, 8);
+                    httpVersion = begin.GetAsciiStringEscaped(scan, 9);
 
                     if (httpVersion == string.Empty)
                     {
