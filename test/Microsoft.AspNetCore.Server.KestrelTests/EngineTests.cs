@@ -591,7 +591,7 @@ namespace Microsoft.AspNetCore.Server.KestrelTests
             {
                 using (var connection = server.CreateConnection())
                 {
-                    await connection.SendEnd(
+                    await connection.Send(
                         "GET / HTTP/1.1",
                         "",
                         "");
@@ -605,9 +605,9 @@ namespace Microsoft.AspNetCore.Server.KestrelTests
 
                 using (var connection = server.CreateConnection())
                 {
-                    await connection.SendEnd(
+                    await connection.Send(
                         "GET / HTTP/1.0",
-                        "Connection: kee-alive",
+                        "Connection: keep-alive",
                         "",
                         "");
                     await connection.ReceiveEnd(
