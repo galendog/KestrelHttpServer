@@ -548,9 +548,6 @@ namespace Microsoft.AspNetCore.Server.KestrelTests
                         "POST / HTTP/1.1",
                         "Content-Length: 3",
                         "",
-                        "101POST / HTTP/1.1",
-                        "Content-Length: 3",
-                        "",
                         "204POST / HTTP/1.1",
                         "Content-Length: 3",
                         "",
@@ -562,9 +559,6 @@ namespace Microsoft.AspNetCore.Server.KestrelTests
                         "",
                         "200");
                     await connection.ReceiveEnd(
-                        "HTTP/1.1 101 Switching Protocols",
-                        $"Date: {testContext.DateHeaderValue}",
-                        "",
                         "HTTP/1.1 204 No Content",
                         $"Date: {testContext.DateHeaderValue}",
                         "",
@@ -579,6 +573,49 @@ namespace Microsoft.AspNetCore.Server.KestrelTests
                         "Content-Length: 0",
                         "",
                         "");
+                }
+            }
+        }
+
+        [Theory]
+        [MemberData(nameof(ConnectionFilterData))]
+        public async Task ConnectionClosedAfter101Response(TestServiceContext testContext)
+        {
+            using (var server = new TestServer(async httpContext =>
+            {
+                var request = httpContext.Request;
+                var stream = await httpContext.Features.Get<IHttpUpgradeFeature>().UpgradeAsync();
+                var response = Encoding.ASCII.GetBytes("hello, world");
+                await stream.WriteAsync(response, 0, response.Length);
+            }, testContext))
+            {
+                using (var connection = server.CreateConnection())
+                {
+                    await connection.SendEnd(
+                        "GET / HTTP/1.1",
+                        "",
+                        "");
+                    await connection.ReceiveEnd(
+                        "HTTP/1.1 101 Switching Protocols",
+                        "Connection: Upgrade",
+                        $"Date: {testContext.DateHeaderValue}",
+                        "",
+                        "hello, world");
+                }
+
+                using (var connection = server.CreateConnection())
+                {
+                    await connection.SendEnd(
+                        "GET / HTTP/1.0",
+                        "Connection: kee-alive",
+                        "",
+                        "");
+                    await connection.ReceiveEnd(
+                        "HTTP/1.1 101 Switching Protocols",
+                        "Connection: Upgrade",
+                        $"Date: {testContext.DateHeaderValue}",
+                        "",
+                        "hello, world");
                 }
             }
         }

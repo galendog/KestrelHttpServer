@@ -514,7 +514,7 @@ namespace Microsoft.AspNetCore.Server.Kestrel.Internal.Http
         {
             ProduceStartAndFireOnStarting().GetAwaiter().GetResult();
 
-            if (_canHaveBody || StatusCode == 101)
+            if (_canHaveBody)
             {
                 if (_autoChunk)
                 {
@@ -542,7 +542,7 @@ namespace Microsoft.AspNetCore.Server.Kestrel.Internal.Http
                 return WriteAsyncAwaited(data, cancellationToken);
             }
 
-            if (_canHaveBody || StatusCode == 101)
+            if (_canHaveBody)
             {
                 if (_autoChunk)
                 {
@@ -568,7 +568,7 @@ namespace Microsoft.AspNetCore.Server.Kestrel.Internal.Http
         {
             await ProduceStartAndFireOnStarting();
 
-            if (_canHaveBody || StatusCode == 101)
+            if (_canHaveBody)
             {
                 if (_autoChunk)
                 {
@@ -771,11 +771,13 @@ namespace Microsoft.AspNetCore.Server.Kestrel.Internal.Http
             // Set whether response can have body
             _canHaveBody = StatusCanHaveBody(StatusCode) && Method != "HEAD";
 
+            // Don't set the Content-Length or Transfer-Encoding headers
+            // automatically for HEAD requests or 204, 205, 304 responses.
             if (_canHaveBody)
             {
                 if (!responseHeaders.HasTransferEncoding && !responseHeaders.HasContentLength)
                 {
-                    if (appCompleted)
+                    if (appCompleted && StatusCode != 101)
                     {
                         // Since the app has completed and we are only now generating
                         // the headers we can safely set the Content-Length to 0.
@@ -790,7 +792,7 @@ namespace Microsoft.AspNetCore.Server.Kestrel.Internal.Http
                         //
                         // A server MUST NOT send a response containing Transfer-Encoding unless the corresponding
                         // request indicates HTTP/1.1 (or later).
-                        if (_httpVersion == Http.HttpVersion.Http11)
+                        if (_httpVersion == Http.HttpVersion.Http11 && StatusCode != 101)
                         {
                             _autoChunk = true;
                             responseHeaders.SetRawTransferEncoding("chunked", _bytesTransferEncodingChunked);
@@ -804,8 +806,6 @@ namespace Microsoft.AspNetCore.Server.Kestrel.Internal.Http
             }
             else
             {
-                // Don't set the Content-Length or Transfer-Encoding headers
-                // automatically for HEAD requests or 204, 205, 304 responses.
                 if (responseHeaders.HasTransferEncoding)
                 {
                     RejectNonBodyTransferEncodingResponse(appCompleted);
@@ -1271,8 +1271,7 @@ namespace Microsoft.AspNetCore.Server.Kestrel.Internal.Http
         public bool StatusCanHaveBody(int statusCode)
         {
             // List of status codes taken from Microsoft.Net.Http.Server.Response
-            return statusCode != 101 &&
-                   statusCode != 204 &&
+            return statusCode != 204 &&
                    statusCode != 205 &&
                    statusCode != 304;
         }
